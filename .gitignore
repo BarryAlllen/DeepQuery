@@ -26,3 +26,6 @@ knowledge_base/
 # IDE
 .vscode/
 .idea/
+
+# DB
+.db
