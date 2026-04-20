@@ -23,7 +23,9 @@ def test_build_command_without_settings_has_no_mcp_flags():
 
 def test_build_command_appends_mcp_config_and_skip_permissions(tmp_path: Path):
     s = _settings(tmp_path)
-    adapter = ClaudeCodeAdapter(settings=s)
+    kb = tmp_path / "kb" / "shared"
+    kb.mkdir(parents=True)
+    adapter = ClaudeCodeAdapter(settings=s, options={"mcp_dirs": [str(kb)]})
 
     cmd = adapter.build_command("讲讲超时配置")
 
@@ -38,12 +40,14 @@ def test_build_command_appends_mcp_config_and_skip_permissions(tmp_path: Path):
     assert "--append-system-prompt" in cmd
     sp = cmd[cmd.index("--append-system-prompt") + 1]
     assert "filesystem MCP" in sp
-    assert str((tmp_path / "kb").resolve()) in sp
+    assert str(kb.resolve()) in sp
 
 
 def test_build_command_respects_skip_permissions_off(tmp_path: Path):
     s = _settings(tmp_path, mcp_skip_permissions=False)
-    cmd = ClaudeCodeAdapter(settings=s).build_command("hi")
+    kb = tmp_path / "kb" / "shared"
+    kb.mkdir(parents=True)
+    cmd = ClaudeCodeAdapter(settings=s, options={"mcp_dirs": [str(kb)]}).build_command("hi")
     assert "--mcp-config" in cmd
     assert "--dangerously-skip-permissions" not in cmd
 
@@ -53,6 +57,13 @@ def test_build_command_respects_mcp_disabled(tmp_path: Path):
     cmd = ClaudeCodeAdapter(settings=s).build_command("hi")
     assert "--mcp-config" not in cmd
     assert "--dangerously-skip-permissions" not in cmd
+
+
+def test_build_command_skips_mcp_when_no_dirs(tmp_path: Path):
+    # 没有可见目录时不挂 MCP，避免 server 因缺参启动失败
+    s = _settings(tmp_path)
+    cmd = ClaudeCodeAdapter(settings=s).build_command("hi")
+    assert "--mcp-config" not in cmd
 
 
 def test_build_env_injects_api_key_and_base_url():

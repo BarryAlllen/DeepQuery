@@ -17,28 +17,25 @@ def _settings(tmp_path: Path, **overrides) -> Settings:
     return Settings(**base)
 
 
-def test_build_mcp_config_includes_knowledge_dir(tmp_path: Path):
+def test_build_mcp_config_uses_passed_dirs(tmp_path: Path):
     s = _settings(tmp_path)
-    cfg = build_mcp_config(s)
+    cfg = build_mcp_config(s, [tmp_path / "kb" / "shared"])
 
-    assert "filesystem" in cfg["mcpServers"]
     fs = cfg["mcpServers"]["filesystem"]
     assert fs["command"] == "npx"
-    # 第一个 arg 是 -y，第二个是包名，剩下都是允许目录
     assert fs["args"][:2] == ["-y", "@modelcontextprotocol/server-filesystem"]
-    assert str((tmp_path / "kb").resolve()) in fs["args"][2:]
+    assert str((tmp_path / "kb" / "shared").resolve()) in fs["args"][2:]
 
 
-def test_build_mcp_config_appends_extra_dirs_unique(tmp_path: Path):
+def test_build_mcp_config_dedupes_and_appends_extra_dirs(tmp_path: Path):
     extra = tmp_path / "extra"
-    s = _settings(
-        tmp_path,
-        # 故意把 knowledge_dir 也放一遍，验证去重
-        mcp_extra_dirs=[extra, tmp_path / "kb"],
-    )
-    args = build_mcp_config(s)["mcpServers"]["filesystem"]["args"]
+    primary = tmp_path / "kb" / "shared"
+    s = _settings(tmp_path, mcp_extra_dirs=[extra, primary])  # extra_dirs 也含 primary
+
+    args = build_mcp_config(s, [primary, primary])["mcpServers"]["filesystem"]["args"]
     dirs = args[2:]
-    assert dirs.count(str((tmp_path / "kb").resolve())) == 1
+    # 同一目录只出现一次
+    assert dirs.count(str(primary.resolve())) == 1
     assert str(extra.resolve()) in dirs
 
 
@@ -46,7 +43,7 @@ def test_write_mcp_config_creates_file(tmp_path: Path):
     s = _settings(tmp_path)
     target = tmp_path / "nested" / "claude_mcp.json"
 
-    written = write_mcp_config(s, target)
+    written = write_mcp_config(s, [tmp_path / "kb" / "shared"], target)
 
     assert written == target
     assert target.exists()

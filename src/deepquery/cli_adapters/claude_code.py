@@ -30,15 +30,25 @@ class ClaudeCodeAdapter(BaseCLIAdapter):
 
     _mcp_config_path: Path | None = None
 
+    @property
+    def mcp_dirs(self) -> list[Path]:
+        # 由 QueryService 在构造时通过 options['mcp_dirs'] 注入；
+        # v1 来自 KnowledgeService.dirs_for_user，v2 接入鉴权后无需改本类。
+        raw = self.options.get("mcp_dirs") or []
+        return [Path(p) for p in raw]
+
     def _ensure_mcp_config(self) -> Path | None:
         # 未启用或未注入 settings 时不挂 MCP，保持兼容
         if not self._settings or not self._settings.mcp_enabled:
             return None
-        if self._mcp_config_path and self._mcp_config_path.exists():
-            return self._mcp_config_path
-        # 写到临时目录，进程级别复用一份即可
-        tmp = Path(tempfile.gettempdir()) / "deepquery" / "claude_mcp.json"
-        self._mcp_config_path = write_mcp_config(self._settings, tmp)
+        # 没有可见目录就不挂 MCP，否则 server 会因缺参启动失败
+        dirs = self.mcp_dirs
+        if not dirs:
+            return None
+        # 每个用户独立的配置文件，避免互相覆盖
+        user_id = self.options.get("user_id") or "default"
+        tmp = Path(tempfile.gettempdir()) / "deepquery" / f"claude_mcp_{user_id}.json"
+        self._mcp_config_path = write_mcp_config(self._settings, dirs, tmp)
         return self._mcp_config_path
 
     def build_command(self, prompt: str) -> list[str]:
@@ -48,15 +58,14 @@ class ClaudeCodeAdapter(BaseCLIAdapter):
         if mcp_path:
             cmd += ["--mcp-config", str(mcp_path)]
             # 强制引导：让模型把"先查知识库"作为默认动作，避免凭通识乱答
-            kb = self._settings.knowledge_dir.resolve() if self._settings else None
-            if kb:
-                system_prompt = (
-                    f"你是 DeepQuery 知识库助手。已通过 filesystem MCP 暴露目录 {kb}，"
-                    "回答任何问题前必须先用工具检索（list_directory / search_files / read_file）该目录下的文档，"
-                    "再基于实际命中内容作答；如果检索后确实无相关内容，必须先明确说明 \"知识库未找到\"，"
-                    "再决定是否凭通识补充。严禁绕过知识库直接凭印象回答。"
-                )
-                cmd += ["--append-system-prompt", system_prompt]
+            dirs_text = "、".join(str(p.resolve()) for p in self.mcp_dirs)
+            system_prompt = (
+                f"你是 DeepQuery 知识库助手。已通过 filesystem MCP 暴露目录：{dirs_text}。"
+                "回答任何问题前必须先用工具检索（list_directory / search_files / read_file）这些目录下的文档，"
+                "再基于实际命中内容作答；如果检索后确实无相关内容，必须先明确说明 \"知识库未找到\"，"
+                "再决定是否凭通识补充。严禁绕过知识库直接凭印象回答。"
+            )
+            cmd += ["--append-system-prompt", system_prompt]
             # 容器内无人值守：默认跳过工具权限确认
             if self._settings and self._settings.mcp_skip_permissions:
                 cmd.append("--dangerously-skip-permissions")

@@ -6,8 +6,9 @@ from deepquery.api.app import create_app
 
 
 def test_unknown_adapter_returns_structured_error():
-    client = TestClient(create_app())
-    r = client.post("/api/query", json={"question": "hi", "adapter": "no-such-tool"})
+    # with-as 触发 lifespan，让 KnowledgeService 完成初始化
+    with TestClient(create_app()) as client:
+        r = client.post("/api/query", json={"question": "hi", "adapter": "no-such-tool"})
     assert r.status_code == 400
     body = r.json()
     assert body["error"]["code"] == "unknown_adapter"

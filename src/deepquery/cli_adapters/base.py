@@ -32,11 +32,11 @@ class BaseCLIAdapter(ABC):
     def __init__(
         self,
         api_key: str = "",
-        options: dict[str, str] | None = None,
+        options: dict[str, Any] | None = None,
         settings: "Settings | None" = None,
     ) -> None:
         self.api_key = api_key
-        # 适配器级别的额外配置（比如自定义 endpoint）
+        # 适配器级别的额外配置；类型是 dict[str, Any] 因为可能塞列表（如 mcp_dirs）
         self.options = options or {}
         # 全局 settings，给需要 MCP 配置等高级能力的适配器使用；多数子类可忽略
         self._settings: Any = settings
