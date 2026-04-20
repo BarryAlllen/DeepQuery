@@ -10,7 +10,7 @@ def main() -> None:
         factory=True,
         host=settings.host,
         port=settings.port,
-        reload=settings.env == "dev",
+        reload=settings.env == "development",
     )
 
 

@@ -5,15 +5,15 @@ from typing import Literal
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# 运行环境枚举：dev=开发 / prod=生产 / test=测试
-Env = Literal["dev", "prod", "test"]
+# 运行环境枚举：development=开发 / production=生产 / testing=测试
+Env = Literal["development", "production", "testing"]
 
 
 def _env_file() -> str:
     # 根据 DEEPQUERY_ENV 决定加载哪个 .env.* 文件
     import os
 
-    env = os.getenv("DEEPQUERY_ENV", "dev")
+    env = os.getenv("DEEPQUERY_ENV", "development")
     return f".env.{env}"
 
 
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    env: Env = "dev"
+    env: Env = "development"
     # 来自 https://token.cvte.com 的 API Key，透传给底层 CLI 工具
     api_key: str = ""
     # 默认使用的 CLI 适配器名称，可被单次请求覆盖

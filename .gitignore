@@ -11,9 +11,9 @@ wheels/
 
 # Env files
 .env
-.env.dev
-.env.prod
-.env.test
+.env.development
+.env.production
+.env.testing
 
 # Caches
 .pytest_cache/

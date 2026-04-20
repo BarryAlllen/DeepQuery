@@ -6,7 +6,7 @@
 
 ```bash
 uv sync
-cp .env.example .env.dev
+cp .env.example .env.development
 # 填入 DEEPQUERY_API_KEY (来自 https://token.cvte.com)
 
 uv run deepquery
@@ -23,7 +23,7 @@ API:
 
 | 模块 | 作用 |
 |---|---|
-| `config/` | pydantic-settings，按 `DEEPQUERY_ENV` 加载 `.env.{dev,prod,test}` |
+| `config/` | pydantic-settings，按 `DEEPQUERY_ENV` 加载 `.env.{development,production,testing}` |
 | `cli_adapters/` | CLI 工具抽象 + 注册表，新增工具 = 子类 + `@register` |
 | `services/` | `QueryService` 编排：Query → Adapter → Answer |
 | `api/` | FastAPI 路由 |
@@ -49,7 +49,7 @@ class MyToolAdapter(BaseCLIAdapter):
 
 ```bash
 docker build -f docker/Dockerfile -t deepquery:dev .
-docker run --rm -p 8000:8000 --env-file .env.prod deepquery:dev
+docker run --rm -p 8000:8000 --env-file .env.production deepquery:dev
 ```
 
 ## 渐进式路线图

@@ -30,7 +30,7 @@ COPY src ./src
 RUN uv sync --frozen --no-dev || uv sync --no-dev
 
 EXPOSE 8000
-ENV DEEPQUERY_ENV=prod \
+ENV DEEPQUERY_ENV=production \
     DEEPQUERY_HOST=0.0.0.0 \
     DEEPQUERY_PORT=8000
 
