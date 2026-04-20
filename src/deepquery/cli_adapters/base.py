@@ -3,6 +3,10 @@ from __future__ import annotations
 import asyncio
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from deepquery.config.settings import Settings
 
 
 class BaseCLIAdapter(ABC):
@@ -15,10 +19,17 @@ class BaseCLIAdapter(ABC):
     # 适配器唯一名字，用于注册表查找与 API 选择
     name: str = ""
 
-    def __init__(self, api_key: str = "", options: dict[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        api_key: str = "",
+        options: dict[str, str] | None = None,
+        settings: "Settings | None" = None,
+    ) -> None:
         self.api_key = api_key
         # 适配器级别的额外配置（比如自定义 endpoint）
         self.options = options or {}
+        # 全局 settings，给需要 MCP 配置等高级能力的适配器使用；多数子类可忽略
+        self._settings: Any = settings
 
     @abstractmethod
     def build_command(self, prompt: str) -> list[str]:

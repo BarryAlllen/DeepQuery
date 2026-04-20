@@ -17,7 +17,13 @@ class QueryService:
         # 单次请求可以覆盖默认适配器，实现运行时切换 CLI 工具
         adapter_name = name or self.settings.default_adapter
         options = self.settings.adapter_options.get(adapter_name, {})
-        return get_adapter(adapter_name, api_key=self.settings.api_key, options=options)
+        # 把 settings 透传给适配器，让需要 MCP 配置等高级能力的子类按需使用
+        return get_adapter(
+            adapter_name,
+            api_key=self.settings.api_key,
+            options=options,
+            settings=self.settings,
+        )
 
     async def ask(self, query: Query) -> Answer:
         # 非流式：收齐所有输出后一次性返回，适合前端简单调用

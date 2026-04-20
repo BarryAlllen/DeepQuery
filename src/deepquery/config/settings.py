@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     # 本地 Markdown 知识库根目录（后续 knowledge/ 模块使用）
     knowledge_dir: Path = Field(default=Path("./knowledge_base"))
 
+    # 是否为 CLI 工具自动生成 MCP 配置（默认开启 filesystem MCP 暴露知识库）
+    mcp_enabled: bool = True
+    # 额外允许 MCP filesystem 访问的目录；若为空则只暴露 knowledge_dir
+    mcp_extra_dirs: list[Path] = Field(default_factory=list)
+    # 容器/无人值守环境下默认跳过 claude 的工具权限确认；本地调试可关
+    mcp_skip_permissions: bool = True
+
     # 每个适配器的额外配置（比如自定义 base_url），适配器各自取用
     adapter_options: dict[str, dict[str, str]] = Field(default_factory=dict)
 

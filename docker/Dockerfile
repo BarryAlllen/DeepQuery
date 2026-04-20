@@ -13,9 +13,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# AI CLI tools (pin versions in production)
+# AI CLI tools + MCP servers (pin versions in production)
 RUN npm install -g \
         @anthropic-ai/claude-code \
+        @modelcontextprotocol/server-filesystem \
     # && npm install -g opencode-ai \
     # && npm install -g cursor-agent \
     && npm cache clean --force
