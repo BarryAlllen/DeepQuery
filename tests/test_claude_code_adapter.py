@@ -59,4 +59,69 @@ def test_build_env_injects_api_key_and_base_url():
     adapter = ClaudeCodeAdapter(api_key="sk-test", options={"base_url": "https://gw.example"})
     env = adapter.build_env()
     assert env["ANTHROPIC_API_KEY"] == "sk-test"
+    # 同时设置 AUTH_TOKEN 兜底，部分 SDK 走这个变量
+    assert env["ANTHROPIC_AUTH_TOKEN"] == "sk-test"
     assert env["ANTHROPIC_BASE_URL"] == "https://gw.example"
+
+
+def test_build_env_falls_back_to_settings_base_url(tmp_path: Path):
+    # 没有 options.base_url 时应使用 settings.claude_base_url
+    s = _settings(tmp_path, claude_base_url="https://token.cvte.com")
+    env = ClaudeCodeAdapter(api_key="sk", settings=s).build_env()
+    assert env["ANTHROPIC_BASE_URL"] == "https://token.cvte.com"
+
+
+def test_options_base_url_overrides_settings(tmp_path: Path):
+    # 单适配器 options 优先级高于全局 settings
+    s = _settings(tmp_path, claude_base_url="https://global")
+    env = ClaudeCodeAdapter(
+        api_key="sk", options={"base_url": "https://local"}, settings=s
+    ).build_env()
+    assert env["ANTHROPIC_BASE_URL"] == "https://local"
+
+
+def test_build_env_skips_keys_when_unset():
+    env = ClaudeCodeAdapter().build_env()
+    assert "ANTHROPIC_API_KEY" not in env
+    assert "ANTHROPIC_BASE_URL" not in env
+
+
+import pytest
+
+from deepquery.core.exceptions import AdapterAuthError, AdapterRuntimeError
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "Error: 401 Unauthorized",
+        "request failed: 403 forbidden",
+        "Invalid API key provided",
+        "authentication failed: token expired",
+        "API key not found. Please run `claude login`.",
+        "鉴权失败，请检查 token",
+        "请先登录后重试",
+    ],
+)
+def test_classify_failure_detects_auth_errors(stderr: str):
+    err = ClaudeCodeAdapter().classify_failure(1, stderr)
+    assert isinstance(err, AdapterAuthError)
+    assert err.http_status == 401
+    assert err.adapter == "claude_code"
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "Error: connection refused",
+        "Internal server error",
+        "无法解析模型输出",
+        "",
+    ],
+)
+def test_classify_failure_falls_back_to_runtime(stderr: str):
+    err = ClaudeCodeAdapter().classify_failure(2, stderr)
+    assert isinstance(err, AdapterRuntimeError)
+    # 不应被误判成 auth
+    assert not isinstance(err, AdapterAuthError)
+    assert err.http_status == 502

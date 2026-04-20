@@ -1,11 +1,26 @@
 from __future__ import annotations
 
+import re
 import tempfile
 from pathlib import Path
 
 from deepquery.cli_adapters.base import BaseCLIAdapter
 from deepquery.cli_adapters.registry import register
+from deepquery.core.exceptions import AdapterAuthError, AdapterRuntimeError
 from deepquery.mcp import write_mcp_config
+
+# 命中即视为鉴权问题：HTTP 401/403、常见英文/中文鉴权关键字、缺少 key 提示
+_AUTH_PATTERNS = re.compile(
+    r"\b(401|403)\b"
+    r"|unauthor[ie]zed"
+    r"|forbidden"
+    r"|invalid[\s_-]?api[\s_-]?key"
+    r"|authentication[\s_-]?(failed|error)"
+    r"|api[\s_-]?key[\s_-]?(not[\s_]?found|missing|invalid)"
+    r"|please run.*login"
+    r"|未授权|鉴权失败|认证失败|无效.*api[\s_-]?key|请先登录",
+    re.IGNORECASE,
+)
 
 
 @register
@@ -49,11 +64,28 @@ class ClaudeCodeAdapter(BaseCLIAdapter):
 
     def build_env(self) -> dict[str, str]:
         env: dict[str, str] = {}
-        # 透传 API Key；生产中会是从 token.cvte.com 拿到的 key
+        # 透传 API Key；生产中是从 https://token.cvte.com 申请的 key
         if self.api_key:
             env["ANTHROPIC_API_KEY"] = self.api_key
-        # 允许走公司代理 / 自建网关
+            # 公司网关同时签发的 token，部分 SDK 会读 ANTHROPIC_AUTH_TOKEN，一并设置兜底
+            env["ANTHROPIC_AUTH_TOKEN"] = self.api_key
+        # base_url 优先级：单适配器 options > 全局 settings.claude_base_url
         base_url = self.options.get("base_url")
+        if not base_url and self._settings:
+            base_url = getattr(self._settings, "claude_base_url", "") or ""
         if base_url:
             env["ANTHROPIC_BASE_URL"] = base_url
         return env
+
+    def classify_failure(self, returncode: int, stderr: str) -> AdapterRuntimeError:
+        # claude CLI 在鉴权问题上没有稳定的 exit code，只能扫 stderr 关键词
+        if _AUTH_PATTERNS.search(stderr):
+            hint = (
+                "鉴权失败：请检查 DEEPQUERY_API_KEY 是否有效、"
+                "DEEPQUERY_CLAUDE_BASE_URL 是否正确，或本机 `claude login` 状态。"
+            )
+            return AdapterAuthError(
+                f"{hint} 原始 stderr: {stderr.strip()[:500]}",
+                adapter=self.name,
+            )
+        return super().classify_failure(returncode, stderr)

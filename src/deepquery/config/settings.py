@@ -30,11 +30,16 @@ class Settings(BaseSettings):
     env: Env = "development"
     # 来自 https://token.cvte.com 的 API Key，透传给底层 CLI 工具
     api_key: str = ""
+    # Claude/Anthropic 兼容网关地址；公司场景填 https://token.cvte.com/... 即可走自建网关
+    claude_base_url: str = ""
     # 默认使用的 CLI 适配器名称，可被单次请求覆盖
     default_adapter: str = "claude_code"
 
     host: str = "0.0.0.0"
     port: int = 8000
+
+    # 单次 CLI 调用的硬超时（秒）。0 表示不限制
+    cli_timeout_seconds: int = 120
 
     # 本地 Markdown 知识库根目录（后续 knowledge/ 模块使用）
     knowledge_dir: Path = Field(default=Path("./knowledge_base"))

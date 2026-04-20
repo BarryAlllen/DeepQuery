@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from deepquery.core.exceptions import UnknownAdapterError
+
 if TYPE_CHECKING:
     from deepquery.cli_adapters.base import BaseCLIAdapter
 
@@ -18,9 +20,12 @@ def register(cls: type["BaseCLIAdapter"]) -> type["BaseCLIAdapter"]:
 
 
 def get_adapter(name: str, **kwargs) -> "BaseCLIAdapter":
-    # 按名字取出适配器并实例化，未注册则抛出明确的错误
+    # 按名字取出适配器并实例化，未注册则抛业务异常（API 层会转 400）
     if name not in _REGISTRY:
-        raise KeyError(f"未知的 CLI 适配器: {name}. 可选: {list(_REGISTRY)}")
+        raise UnknownAdapterError(
+            f"未知的 CLI 适配器: {name}. 可选: {list(_REGISTRY)}",
+            adapter=name,
+        )
     return _REGISTRY[name](**kwargs)
 
 
