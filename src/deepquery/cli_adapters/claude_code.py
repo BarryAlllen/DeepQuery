@@ -69,10 +69,10 @@ class ClaudeCodeAdapter(BaseCLIAdapter):
             env["ANTHROPIC_API_KEY"] = self.api_key
             # 公司网关同时签发的 token，部分 SDK 会读 ANTHROPIC_AUTH_TOKEN，一并设置兜底
             env["ANTHROPIC_AUTH_TOKEN"] = self.api_key
-        # base_url 优先级：单适配器 options > 全局 settings.claude_base_url
+        # base_url 优先级：单适配器 options > 全局 settings.api_base_url
         base_url = self.options.get("base_url")
         if not base_url and self._settings:
-            base_url = getattr(self._settings, "claude_base_url", "") or ""
+            base_url = getattr(self._settings, "api_base_url", "") or ""
         if base_url:
             env["ANTHROPIC_BASE_URL"] = base_url
         return env
@@ -82,7 +82,7 @@ class ClaudeCodeAdapter(BaseCLIAdapter):
         if _AUTH_PATTERNS.search(stderr):
             hint = (
                 "鉴权失败：请检查 DEEPQUERY_API_KEY 是否有效、"
-                "DEEPQUERY_CLAUDE_BASE_URL 是否正确，或本机 `claude login` 状态。"
+                "DEEPQUERY_API_BASE_URL 是否正确，或本机 `claude login` 状态。"
             )
             return AdapterAuthError(
                 f"{hint} 原始 stderr: {stderr.strip()[:500]}",

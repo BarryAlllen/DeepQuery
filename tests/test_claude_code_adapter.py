@@ -65,15 +65,15 @@ def test_build_env_injects_api_key_and_base_url():
 
 
 def test_build_env_falls_back_to_settings_base_url(tmp_path: Path):
-    # 没有 options.base_url 时应使用 settings.claude_base_url
-    s = _settings(tmp_path, claude_base_url="https://token.cvte.com")
+    # 没有 options.base_url 时应使用 settings.api_base_url
+    s = _settings(tmp_path, api_base_url="https://token.cvte.com")
     env = ClaudeCodeAdapter(api_key="sk", settings=s).build_env()
     assert env["ANTHROPIC_BASE_URL"] == "https://token.cvte.com"
 
 
 def test_options_base_url_overrides_settings(tmp_path: Path):
     # 单适配器 options 优先级高于全局 settings
-    s = _settings(tmp_path, claude_base_url="https://global")
+    s = _settings(tmp_path, api_base_url="https://global")
     env = ClaudeCodeAdapter(
         api_key="sk", options={"base_url": "https://local"}, settings=s
     ).build_env()

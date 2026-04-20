@@ -28,10 +28,11 @@ class Settings(BaseSettings):
     )
 
     env: Env = "development"
-    # 来自 https://token.cvte.com 的 API Key，透传给底层 CLI 工具
+    # 上游 LLM API 的访问凭证。公司场景从 https://token.cvte.com 申请；
+    # 留空时退回 CLI 自身的本地凭据（如 `claude login`）。
     api_key: str = ""
-    # Claude/Anthropic 兼容网关地址；公司场景填 https://token.cvte.com/... 即可走自建网关
-    claude_base_url: str = ""
+    # 上游 LLM API 的基础地址。公司场景填公司网关，留空则走 CLI 默认（如 Anthropic 官方）。
+    api_base_url: str = ""
     # 默认使用的 CLI 适配器名称，可被单次请求覆盖
     default_adapter: str = "claude_code"
 
