@@ -28,7 +28,8 @@ knowledge_base/
 .idea/
 
 # DB
-.db
+*.db
+deepquery.db
 
 # md
 .md

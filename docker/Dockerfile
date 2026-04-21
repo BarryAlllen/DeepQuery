@@ -27,6 +27,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock* README.md ./
 COPY src ./src
+COPY alembic.ini ./
+COPY alembic ./alembic
 
 # Install runtime deps. Frontend deps not needed in production image.
 RUN uv sync --frozen --no-dev || uv sync --no-dev
@@ -44,11 +46,13 @@ ENV DEEPQUERY_ENV=production \
     DEEPQUERY_HOST=0.0.0.0 \
     DEEPQUERY_PORT=8000 \
     DEEPQUERY_KNOWLEDGE_DIR=/data/knowledge_base \
+    DEEPQUERY_DATABASE_URL=sqlite+aiosqlite:////data/deepquery.db \
     DEEPQUERY_MCP_SKIP_PERMISSIONS=true
 
 # Container-level healthcheck for OrbStack / k8s readiness
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://127.0.0.1:8000/health || exit 1
 
-CMD ["uv", "run", "deepquery"]
+# 启动：先跑 alembic 迁移把 schema 对齐到当前代码，再启动 web
+CMD ["sh", "-c", "uv run alembic upgrade head && uv run deepquery"]
 
