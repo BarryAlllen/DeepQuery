@@ -1,4 +1,4 @@
-"""把 AdapterError 统一翻译成结构化 JSON 响应。"""
+"""把 AdapterError / 历史异常统一翻译成结构化 JSON 响应。"""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from deepquery.core.exceptions import AdapterError
+from deepquery.history import SessionNotFound
 
 logger = logging.getLogger(__name__)
 
@@ -18,3 +19,7 @@ def install(app: FastAPI) -> None:
         # 业务可预期的错误：按异常自带的 http_status 返回，body 是稳定的 {code, adapter, message}
         logger.info("AdapterError on %s: %s", request.url.path, exc.message)
         return JSONResponse(status_code=exc.http_status, content={"error": exc.to_dict()})
+
+    @app.exception_handler(SessionNotFound)
+    async def _session_not_found(request: Request, exc: SessionNotFound) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": "session 不存在"})

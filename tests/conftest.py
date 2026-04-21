@@ -9,6 +9,21 @@ from pathlib import Path
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _isolate_history_db(tmp_path: Path, monkeypatch):
+    """所有测试用独立 tmp 目录里的 SQLite，避免污染仓库根目录/互相串味。
+
+    注意：get_settings 用了 lru_cache，所以要先 env，再清缓存。
+    """
+    db = tmp_path / "deepquery_test.db"
+    monkeypatch.setenv("DEEPQUERY_DATABASE_URL", f"sqlite+aiosqlite:///{db}")
+    from deepquery.config.settings import get_settings
+
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 def _git(cwd: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
 

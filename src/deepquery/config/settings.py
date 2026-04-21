@@ -96,6 +96,12 @@ class Settings(BaseSettings):
     # 每个适配器的额外配置（比如自定义 base_url），适配器各自取用
     adapter_options: dict[str, dict[str, str]] = Field(default_factory=dict)
 
+    # 问答历史持久化：默认 SQLite 放知识库同级目录，容器里挂到 /data。
+    # 生产想切 Postgres 只改 URL，比如 postgresql+asyncpg://user:pw@host/db
+    database_url: str = "sqlite+aiosqlite:///./deepquery.db"
+    # 是否打开 SQLAlchemy SQL 回显（排查慢查询时临时开）
+    database_echo: bool = False
+
     @field_validator("knowledge_repos", mode="before")
     @classmethod
     def _empty_repos_to_default(cls, v):
