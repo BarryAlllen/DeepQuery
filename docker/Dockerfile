@@ -16,8 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # AI CLI tools + MCP servers (pin versions in production)
 RUN npm install -g \
         @anthropic-ai/claude-code \
+        opencode-ai \
         @modelcontextprotocol/server-filesystem \
-    # && npm install -g opencode-ai \
     # && npm install -g cursor-agent \
     && npm cache clean --force
 
@@ -37,9 +37,19 @@ RUN uv sync --frozen --no-dev || uv sync --no-dev
 # Also create knowledge volume mount point owned by this user.
 RUN useradd --create-home --shell /bin/bash --uid 1000 deepquery \
     && mkdir -p /data/knowledge_base \
-    && chown -R deepquery:deepquery /app /data
+                /home/deepquery/.claude \
+                /home/deepquery/.config/opencode \
+                /home/deepquery/.local/share/opencode \
+    && chown -R deepquery:deepquery /app /data /home/deepquery
 USER deepquery
 ENV HOME=/home/deepquery
+
+# CLI 会话缓存与凭据 —— --session-id/--resume 与 opencode 的 ses_xxx 会话、
+# providers login 凭据都落在这些目录，部署时建议挂载 volume，否则容器重启会丢。
+VOLUME ["/home/deepquery/.claude", \
+        "/home/deepquery/.config/opencode", \
+        "/home/deepquery/.local/share/opencode", \
+        "/data"]
 
 EXPOSE 8000
 ENV DEEPQUERY_ENV=production \
