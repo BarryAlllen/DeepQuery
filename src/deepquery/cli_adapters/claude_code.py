@@ -57,6 +57,10 @@ class ClaudeCodeAdapter(BaseCLIAdapter):
         mcp_path = self._ensure_mcp_config()
         if mcp_path:
             cmd += ["--mcp-config", str(mcp_path)]
+            # 同时通过 --add-dir 把目录加入 claude 自身工具（Read/Glob/Grep）的可访问范围，
+            # 否则在容器中（cwd=/app）调 Read 会被 sandbox 拒绝
+            for d in self.mcp_dirs:
+                cmd += ["--add-dir", str(d.resolve())]
             # 强制引导：让模型把"先查知识库"作为默认动作，避免凭通识乱答
             dirs_text = "、".join(str(p.resolve()) for p in self.mcp_dirs)
             system_prompt = (
