@@ -78,6 +78,8 @@ docker/Dockerfile            # OrbStack 镜像
 4. `--append-system-prompt`：强制引导"先查知识库再回答"，否则模型会凭通识乱答
 5. `--dangerously-skip-permissions`：⚠️ claude 拒绝以 root 跑这个 flag，所以 Dockerfile 必须 `USER deepquery`
 
+⚠️ **MCP Roots 覆盖坑**（容器内才会暴露）：claude CLI 会把进程 cwd 作为 MCP Roots 推给 stdio MCP server，**覆盖 server args 里声明的允许目录**。容器中 cwd=/app 时 filesystem server 实际只暴露 /app，知识库被锁在外。修复：[base.py](src/deepquery/cli_adapters/base.py) `build_cwd()` 默认把子进程 cwd 切到第一个 mcp_dir（绝对路径，不存在时回退 None）。逻辑放在 base 是因为这是"用 stdio MCP 暴露目录"的 CLI 共性，不止 claude_code。
+
 环境变量同时设 `ANTHROPIC_API_KEY` 和 `ANTHROPIC_AUTH_TOKEN`（公司网关 SDK 兜底）+ `ANTHROPIC_BASE_URL`。
 
 `classify_failure` 用正则扫 stderr 关键词识别鉴权失败 → 抛 `AdapterAuthError`（401）；claude CLI 没稳定 exit code 区分 auth。

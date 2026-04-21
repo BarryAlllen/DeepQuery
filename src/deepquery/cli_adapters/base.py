@@ -5,6 +5,7 @@ import logging
 import os
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from deepquery.core.exceptions import (
@@ -49,6 +50,21 @@ class BaseCLIAdapter(ABC):
         """返回要追加到子进程的环境变量（如 API Key），会与当前 os.environ 合并。"""
         return {}
 
+    def build_cwd(self) -> str | None:
+        """返回子进程工作目录；None 继承父进程 cwd。
+
+        默认实现：若 options 注入了 mcp_dirs，则把 cwd 切到第一个目录。
+        起因是部分 CLI（如 claude code）会把 cwd 作为 MCP Roots 推给 stdio MCP server，
+        覆盖 server args 里声明的允许目录；不切 cwd 时容器内（cwd=/app）会让 MCP
+        只暴露 /app，知识库目录被锁在外。子类一般无需重写。
+        """
+        raw = self.options.get("mcp_dirs") or []
+        if not raw:
+            return None
+        first = Path(raw[0]).resolve()
+        # 防御：路径不存在时返回 None，避免 subprocess 启动炸（FileNotFoundError）
+        return str(first) if first.is_dir() else None
+
     def classify_failure(self, returncode: int, stderr: str) -> AdapterRuntimeError:
         """子进程非零退出时的异常构造钩子。
 
@@ -72,6 +88,7 @@ class BaseCLIAdapter(ABC):
     async def run(self, prompt: str) -> AsyncIterator[str]:
         env = {**os.environ, **self.build_env()}
         cmd = self.build_command(prompt)
+        cwd = self.build_cwd()
         try:
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
@@ -79,6 +96,7 @@ class BaseCLIAdapter(ABC):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 env=env,
+                cwd=cwd,
             )
         except FileNotFoundError as e:
             # CLI 二进制不在 PATH——给出明确指引，而不是裸 OSError
