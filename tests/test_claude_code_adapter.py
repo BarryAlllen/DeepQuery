@@ -2,6 +2,13 @@ from pathlib import Path
 
 from deepquery.cli_adapters.claude_code import ClaudeCodeAdapter
 from deepquery.config.settings import Settings
+from deepquery.mcp import write_mcp_config
+
+
+def _shared_mcp(settings: Settings, dirs: list[Path], tmp_path: Path) -> str:
+    # 模拟 SharedMCPConfig 的产物：把共享 claude_mcp.json 写好后，QueryService 把路径
+    # 透传给 adapter。测试里直接预先调一次。
+    return str(write_mcp_config(settings, dirs, tmp_path / "shared_mcp.json"))
 
 
 def _settings(tmp_path: Path, **overrides) -> Settings:
@@ -25,14 +32,17 @@ def test_build_command_appends_mcp_config_and_skip_permissions(tmp_path: Path):
     s = _settings(tmp_path)
     kb = tmp_path / "kb" / "shared"
     kb.mkdir(parents=True)
-    adapter = ClaudeCodeAdapter(settings=s, options={"mcp_dirs": [str(kb)]})
+    cfg = _shared_mcp(s, [kb], tmp_path)
+    adapter = ClaudeCodeAdapter(
+        settings=s, options={"mcp_dirs": [str(kb)], "mcp_config_path": cfg}
+    )
 
     cmd = adapter.build_command("讲讲超时配置")
 
     assert cmd[:3] == ["claude", "-p", "讲讲超时配置"]
     assert "--mcp-config" in cmd
     cfg_path = Path(cmd[cmd.index("--mcp-config") + 1])
-    # 真实写盘了，并且是 JSON
+    # 路径来自共享配置（QueryService 透传）
     assert cfg_path.exists()
     assert cfg_path.read_text().strip().startswith("{")
     assert "--dangerously-skip-permissions" in cmd
@@ -47,7 +57,10 @@ def test_build_command_respects_skip_permissions_off(tmp_path: Path):
     s = _settings(tmp_path, mcp_skip_permissions=False)
     kb = tmp_path / "kb" / "shared"
     kb.mkdir(parents=True)
-    cmd = ClaudeCodeAdapter(settings=s, options={"mcp_dirs": [str(kb)]}).build_command("hi")
+    cfg = _shared_mcp(s, [kb], tmp_path)
+    cmd = ClaudeCodeAdapter(
+        settings=s, options={"mcp_dirs": [str(kb)], "mcp_config_path": cfg}
+    ).build_command("hi")
     assert "--mcp-config" in cmd
     assert "--dangerously-skip-permissions" not in cmd
 
@@ -64,6 +77,30 @@ def test_build_command_skips_mcp_when_no_dirs(tmp_path: Path):
     s = _settings(tmp_path)
     cmd = ClaudeCodeAdapter(settings=s).build_command("hi")
     assert "--mcp-config" not in cmd
+
+
+def test_build_command_uses_session_id_for_first_turn(tmp_path: Path):
+    s = _settings(tmp_path)
+    adapter = ClaudeCodeAdapter(
+        settings=s,
+        options={"session_id": "abcd-uuid", "resume": False},
+    )
+    cmd = adapter.build_command("hi")
+    assert "--session-id" in cmd
+    assert cmd[cmd.index("--session-id") + 1] == "abcd-uuid"
+    assert "--resume" not in cmd
+
+
+def test_build_command_uses_resume_for_followup(tmp_path: Path):
+    s = _settings(tmp_path)
+    adapter = ClaudeCodeAdapter(
+        settings=s,
+        options={"session_id": "abcd-uuid", "resume": True},
+    )
+    cmd = adapter.build_command("hi")
+    assert "--resume" in cmd
+    assert cmd[cmd.index("--resume") + 1] == "abcd-uuid"
+    assert "--session-id" not in cmd
 
 
 def test_build_env_injects_api_key_and_base_url():

@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -90,6 +91,17 @@ class KnowledgeService:
         self._states: dict[str, _RepoState] = {
             r.name: _RepoState(repo=r) for r in settings.knowledge_repos
         }
+        # 目录集可能变化的事件钩子：sync / write / delete 成功后触发。
+        # 由外部（如 SharedMCPConfig）在 app 启动时注入；默认为 no-op。
+        # 做成单回调而不是订阅列表，v1 只有一个消费者（共享 MCP 重写），YAGNI。
+        self.on_dirs_changed: Callable[[], None] = lambda: None
+
+    def _notify_dirs_changed(self) -> None:
+        # 钩子异常不能影响主流程（git sync / 文件写入）
+        try:
+            self.on_dirs_changed()
+        except Exception:
+            logger.exception("on_dirs_changed 钩子失败")
 
     # ---------- 路径解析 ----------
 
@@ -144,6 +156,8 @@ class KnowledgeService:
             except git_sync.GitError as e:
                 st.last_error = str(e)
                 logger.error("初始化仓 %s 失败: %s", st.repo.name, e)
+        # init 后目录集可能从空变为非空，通知一次
+        self._notify_dirs_changed()
 
     async def sync_one(self, name: str) -> SyncResult:
         st = self._states.get(name)
@@ -160,6 +174,7 @@ class KnowledgeService:
                 head = await git_sync.pull(path, branch=st.repo.branch)
                 st.last_synced_at = time.time()
                 st.last_error = ""
+                self._notify_dirs_changed()
                 return SyncResult(name=name, ok=True, head=head)
             except git_sync.GitError as e:
                 st.last_error = str(e)

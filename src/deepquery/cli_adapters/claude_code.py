@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import re
-import tempfile
 from pathlib import Path
 
 from deepquery.cli_adapters.base import BaseCLIAdapter
 from deepquery.cli_adapters.registry import register
 from deepquery.core.exceptions import AdapterAuthError, AdapterRuntimeError
-from deepquery.mcp import write_mcp_config
 
 # 命中即视为鉴权问题：HTTP 401/403、常见英文/中文鉴权关键字、缺少 key 提示
 _AUTH_PATTERNS = re.compile(
@@ -27,6 +25,8 @@ _AUTH_PATTERNS = re.compile(
 class ClaudeCodeAdapter(BaseCLIAdapter):
     # 对应 npm 包 @anthropic-ai/claude-code 提供的 `claude` 命令
     name = "claude_code"
+    # DeepQuery 的 UUID session_id 可直接作为 claude --session-id / --resume 的参数
+    supports_native_session = True
 
     _mcp_config_path: Path | None = None
 
@@ -37,24 +37,36 @@ class ClaudeCodeAdapter(BaseCLIAdapter):
         raw = self.options.get("mcp_dirs") or []
         return [Path(p) for p in raw]
 
-    def _ensure_mcp_config(self) -> Path | None:
-        # 未启用或未注入 settings 时不挂 MCP，保持兼容
+    def _resolve_mcp_config(self) -> Path | None:
+        # 共享单例：路径由 SharedMCPConfig 在启动 / 知识库变化时写好，本类只读。
+        # v2 用户私有 MCP 时，会再叠一层 options["user_mcp_path"]，
+        # 届时在这里做 merge（共享 servers + 用户 servers）。
         if not self._settings or not self._settings.mcp_enabled:
             return None
-        # 没有可见目录就不挂 MCP，否则 server 会因缺参启动失败
-        dirs = self.mcp_dirs
-        if not dirs:
+        if not self.mcp_dirs:
             return None
-        # 每个用户独立的配置文件，避免互相覆盖
-        user_id = self.options.get("user_id") or "default"
-        tmp = Path(tempfile.gettempdir()) / "deepquery" / f"claude_mcp_{user_id}.json"
-        self._mcp_config_path = write_mcp_config(self._settings, dirs, tmp)
-        return self._mcp_config_path
+        shared = self.options.get("mcp_config_path")
+        if not shared:
+            return None
+        path = Path(shared)
+        if not path.exists():
+            return None
+        self._mcp_config_path = path
+        return path
 
     def build_command(self, prompt: str) -> list[str]:
         # `claude -p` 为非交互式模式：读取 prompt 并把回答写到 stdout
         cmd: list[str] = ["claude", "-p", prompt]
-        mcp_path = self._ensure_mcp_config()
+        # 绑定到 DeepQuery 的 session：首轮 --session-id 建新 claude 侧会话，
+        # 后续轮次（已有成功 assistant 的会话）用 --resume 续接上次上下文。
+        # 这样 claude 自带的会话缓存就承担了"对话记忆"的角色，DeepQuery 不必手动拼 history。
+        sid = self.options.get("session_id")
+        if sid:
+            if self.options.get("resume"):
+                cmd += ["--resume", str(sid)]
+            else:
+                cmd += ["--session-id", str(sid)]
+        mcp_path = self._resolve_mcp_config()
         if mcp_path:
             cmd += ["--mcp-config", str(mcp_path)]
             # 同时通过 --add-dir 把目录加入 claude 自身工具（Read/Glob/Grep）的可访问范围，

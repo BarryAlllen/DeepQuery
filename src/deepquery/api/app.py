@@ -7,6 +7,7 @@ from deepquery.api.routes import adapters, knowledge, query, sessions
 from deepquery.config.settings import get_settings
 from deepquery.history import HistoryService
 from deepquery.knowledge import KnowledgeService
+from deepquery.mcp import SharedMCPConfig
 
 
 def create_app() -> FastAPI:
@@ -18,11 +19,18 @@ def create_app() -> FastAPI:
         # 启动：初始化知识库（含必要时 git clone），开后台自动 pull 任务
         ks = KnowledgeService(settings)
         await ks.initialize()
+        # 共享 MCP 配置：一次写盘，所有用户 / 所有 CLI 复用。
+        # v2 加用户私有 MCP 时会再叠一层；这里永远只管 public 目录的共享部分。
+        mcp_shared = SharedMCPConfig(settings, ks)
+        mcp_shared.rebuild()
+        # 知识库后续变化时需要重写共享配置（git sync / webhook / 文档写入会影响目录树）
+        ks.on_dirs_changed = mcp_shared.rebuild  # type: ignore[attr-defined]
         # 初始化历史库：开发/测试兜底 create_all；生产镜像里由 alembic 负责
         hs = HistoryService(settings)
         await hs.create_schema()
         app.state.settings = settings
         app.state.knowledge = ks
+        app.state.mcp_shared = mcp_shared
         app.state.history = hs
         task = None
         if settings.knowledge_auto_pull_seconds > 0:

@@ -19,4 +19,5 @@ def get_query_service(request: Request) -> QueryService:
         request.app.state.settings,
         request.app.state.knowledge,
         request.app.state.history,
+        request.app.state.mcp_shared,
     )

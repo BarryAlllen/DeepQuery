@@ -9,6 +9,7 @@ from deepquery.core.exceptions import AdapterError
 from deepquery.core.models import Answer, Query
 from deepquery.history import HistoryService
 from deepquery.knowledge import DEFAULT_USER, KnowledgeService
+from deepquery.mcp import SharedMCPConfig
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +22,12 @@ class QueryService:
         settings: Settings,
         knowledge: KnowledgeService,
         history: HistoryService,
+        mcp_shared: SharedMCPConfig | None = None,
     ) -> None:
         self.settings = settings
         self.knowledge = knowledge
         self.history = history
+        self.mcp_shared = mcp_shared
 
     def _resolve_adapter(self, name: str | None, user_id: str):
         # 单次请求可以覆盖默认适配器，实现运行时切换 CLI 工具
@@ -33,6 +36,16 @@ class QueryService:
         # 注入按用户解析后的 MCP 可见目录；v2 加鉴权后只需改 user_id 来源
         options["mcp_dirs"] = [str(p) for p in self.knowledge.dirs_for_user(user_id)]
         options["user_id"] = user_id
+        # 共享 MCP 配置路径：适配器只读，不再每请求写盘。
+        # v2 用户私有 MCP 时，再额外注入 options["user_mcp_path"] /
+        # options["user_opencode_dir"]，由适配器决定是否合并。
+        if self.mcp_shared is not None:
+            claude_path = self.mcp_shared.claude_config_path
+            if claude_path is not None:
+                options.setdefault("mcp_config_path", str(claude_path))
+            opencode_dir = self.mcp_shared.opencode_config_dir
+            if opencode_dir is not None:
+                options.setdefault("opencode_config_dir", str(opencode_dir))
         return get_adapter(
             adapter_name,
             api_key=self.settings.api_key,

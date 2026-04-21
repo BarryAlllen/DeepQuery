@@ -30,6 +30,12 @@ class BaseCLIAdapter(ABC):
     # 适配器唯一名字，用于注册表查找与 API 选择
     name: str = ""
 
+    # 是否能用 DeepQuery 的 session_id 作为 CLI 原生会话标识。
+    # 目前只有 claude_code 可以（它接受任意 UUID 建新会话）；
+    # opencode 用自己的 ses_xxx 格式、DB 里不可控，所以走应用层 replay。
+    # QueryService 依赖这个标志决定"同 CLI 续聊"时是走 CLI 原生续接还是 replay 前缀。
+    supports_native_session: bool = False
+
     def __init__(
         self,
         api_key: str = "",
