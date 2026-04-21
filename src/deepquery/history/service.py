@@ -118,6 +118,71 @@ class HistoryService:
             await db.refresh(msg)
             return msg
 
+    async def has_completed_turn(self, session_id: str) -> bool:
+        """判断会话里是否已有"成功"的 assistant 轮次。
+
+        用途：适配器决定首轮用 --session-id 建会话，之后用 --resume 续接。
+        error_code 非空的 assistant 行不算成功，避免用损坏的 claude cache 续接。
+        """
+        from sqlalchemy import func as sqfunc
+
+        async with self._sessionmaker() as db:
+            stmt = select(sqfunc.count(Message.id)).where(
+                Message.session_id == session_id,
+                Message.role == MessageRole.assistant.value,
+                Message.error_code.is_(None),
+                Message.content != "",
+            )
+            return (await db.execute(stmt)).scalar_one() > 0
+
+    async def last_successful_adapter(self, session_id: str) -> str | None:
+        """返回本会话最近一条成功 assistant 消息所用的适配器名；全没有成功则返回 None。
+
+        用途：QueryService 用来判断本轮是"同 CLI 续聊"还是"换 CLI 续聊"。
+        """
+        async with self._sessionmaker() as db:
+            stmt = (
+                select(Message.adapter)
+                .where(
+                    Message.session_id == session_id,
+                    Message.role == MessageRole.assistant.value,
+                    Message.error_code.is_(None),
+                    Message.content != "",
+                )
+                .order_by(Message.created_at.desc())
+                .limit(1)
+            )
+            return (await db.execute(stmt)).scalar_one_or_none()
+
+    async def messages_for_replay(self, session_id: str) -> list[MessageView]:
+        """返回本会话按时间升序的所有消息；供换 CLI 时拼历史文本使用。
+
+        失败的 assistant 行 (error_code 非空 / content 为空) 会被过滤，
+        避免把"上一轮报错"作为上下文误导模型。
+        """
+        async with self._sessionmaker() as db:
+            stmt = (
+                select(Message)
+                .where(Message.session_id == session_id)
+                .order_by(Message.created_at.asc())
+            )
+            rows = (await db.execute(stmt)).scalars().all()
+            out: list[MessageView] = []
+            for m in rows:
+                if m.role == MessageRole.assistant.value and (m.error_code or not m.content):
+                    continue
+                out.append(
+                    MessageView(
+                        id=m.id,
+                        role=m.role,
+                        content=m.content,
+                        adapter=m.adapter,
+                        error_code=m.error_code,
+                        created_at=m.created_at,
+                    )
+                )
+            return out
+
     async def start_assistant_message(self, session_id: str, adapter: str) -> Message:
         """流式场景：先落占位行，流结束后 finalize 更新 content。"""
         async with self._sessionmaker() as db:

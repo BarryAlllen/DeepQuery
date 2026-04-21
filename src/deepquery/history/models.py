@@ -13,8 +13,10 @@ from sqlalchemy import DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
-def _uuid_hex() -> str:
-    return uuid4().hex
+def _uuid_str() -> str:
+    # 用带连字符的标准 UUID 字符串（36 字符）。原因：claude CLI 的
+    # --session-id 要求合法 UUID 格式，而 uuid4().hex 是 32 字符无连字符版本。
+    return str(uuid4())
 
 
 def _utcnow() -> datetime:
@@ -35,7 +37,7 @@ class MessageRole(str, Enum):
 class Session(Base):
     __tablename__ = "sessions"
 
-    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid_hex)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
     # v1 恒为 'default'；v2 接入真实用户系统后落真实 id
     user_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     # 会话标题：首条 question 截断 40 字，后续可 PATCH
@@ -59,9 +61,9 @@ class Session(Base):
 class Message(Base):
     __tablename__ = "messages"
 
-    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid_hex)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid_str)
     session_id: Mapped[str] = mapped_column(
-        String(32), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+        String(36), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
     )
     # user / assistant
     role: Mapped[str] = mapped_column(String(16), nullable=False)
